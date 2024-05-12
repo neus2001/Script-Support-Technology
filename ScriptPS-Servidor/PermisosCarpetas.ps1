@@ -1,22 +1,36 @@
-﻿# Ruta de la carpeta principal donde se crearán las carpetas de usuario
-$carpetaPrincipal = "\\WINSERVER-AD\Users\Administrador\Documents\PerfilesMoviles"
+# Definir la ruta base para los perfiles móviles
+$BasePath = "\\WINSERVER-AD\Users\Administrador\Documents\PerfilesMoviles"
 
-# Obtener la lista de usuarios para los que se crearán las carpetas
-$usuarios = Get-ADUser -Filter * -SearchBase "OU=Usuarios,DC=dominio,DC=com"
+# Lista de usuarios que tendrán control total en la carpeta principal
+$UsuariosConPermisosTotales = "nchafer", "jlopez", "mgarcia", "lmarquez", "egimenez", "jmateu", "mquesada", "ojuarez", "jgomez", "nmolina", "pcháfer", "sclimente", "jvidal", "gramir", "rnadal", "evbataller", "vramos", "mcarpi", "rferrer", "pbilal", "drequena", "psanchez", "sgimenez", "ellutx", "cbalaguer", "vbalaller", "rmurillo", "eiglesias"
 
-# Recorrer la lista de usuarios y crear las carpetas correspondientes
-foreach ($usuario in $usuarios) {
-    $carpetaUsuario = Join-Path -Path $carpetaPrincipal -ChildPath $usuario.SamAccountName
+# Agregar permisos a la carpeta principal compartida
+$Acl = Get-Acl -Path $BasePath
+$Permission = "Everyone", "FullControl", "Allow"
+$Rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList $Permission
+$Acl.SetAccessRule($Rule)
+Set-Acl -Path $BasePath -AclObject $Acl
 
-    # Crear la carpeta del usuario
-    New-Item -ItemType Directory -Path $carpetaUsuario -Force
+# Iterar sobre la lista de usuarios y asignar permisos
+foreach ($Usuario in $UsuariosConPermisosTotales) {
+    $ProfilePath = Join-Path -Path $BasePath -ChildPath $Usuario
 
-    # Asignar permisos de control total al usuario y quitar permisos para los demás
-    $acl = Get-Acl -Path $carpetaUsuario
-    $acl.SetAccessRuleProtection($true, $false)
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($usuario.SamAccountName, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
-    $acl.AddAccessRule($rule)
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Everyone", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Deny")
-    $acl.AddAccessRule($rule)
-    Set-Acl -Path $carpetaUsuario -AclObject $acl
+    # Verificar si la carpeta del usuario existe
+    if (Test-Path -Path $ProfilePath -PathType Container) {
+        # Agregar permisos totales al usuario
+        $AclUser = Get-Acl -Path $ProfilePath
+        $PermissionUser = "Dom\$Usuario", "FullControl", "Allow"
+        $RuleUser = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList $PermissionUser
+        $AclUser.SetAccessRule($RuleUser)
+
+        # Deshabilitar la herencia de permisos
+        $AclUser.SetAccessRuleProtection($true, $false)
+
+        Set-Acl -Path $ProfilePath -AclObject $AclUser
+        Write-Host "Se han configurado los permisos para la carpeta del usuario $Usuario."
+    } else {
+        Write-Host "La carpeta del usuario $Usuario no existe en '$ProfilePath'."
+    }
 }
+
+Write-Host "Se han configurado los permisos para las carpetas personales de los usuarios del dominio en la carpeta principal compartida."
