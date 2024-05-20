@@ -25,11 +25,22 @@ $NewGPO = New-GPO -Name "PoliticaFirewall"
 foreach ($rule in $FirewallRules.GetEnumerator()) {
     $RuleName = $rule.Key
     $RuleProperties = $rule.Value
-    New-NetFirewallRule -DisplayName $RuleProperties.DisplayName -Name $RuleName -Protocol $RuleProperties.Protocol -RemoteAddress $RuleProperties.RemoteAddress -RemotePort $RuleProperties.RemotePort -Direction $RuleProperties.Direction -Action $RuleProperties.Action -Profile Any -Enabled True
+    
+    # Verificar si la regla de firewall ya existe
+    $existingRule = Get-NetFirewallRule -DisplayName $RuleProperties.DisplayName -ErrorAction SilentlyContinue
+    
+    if (-not $existingRule) {
+        # Si la regla no existe, crearla
+        New-NetFirewallRule -DisplayName $RuleProperties.DisplayName -Name $RuleName -Protocol $RuleProperties.Protocol -RemoteAddress $RuleProperties.RemoteAddress -RemotePort $RuleProperties.RemotePort -Direction $RuleProperties.Direction -Action $RuleProperties.Action -Profile Any -Enabled True
+    } else {
+        Write-Host "La regla de firewall '$($RuleProperties.DisplayName)' ya existe."
+    }
+    
+    # Configurar la pol√≠tica de GPO
     Set-GPRegistryValue -Name $NewGPO.DisplayName -Key "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile" -ValueName "EnableFirewall" -Type DWord -Value 1
 }
 
-# Obtener las OUs especÌficas en el dominio
+# Obtener las OUs espec√≠ficas en el dominio
 $OUs = Get-ADOrganizationalUnit -Filter * -SearchBase "OU=ou.SST,DC=dom,DC=SST"
 
 # Vincular la nueva GPO a todas las OUs del dominio
@@ -42,4 +53,4 @@ foreach ($OU in $OUs) {
     }
 }
 
-Write-Host "Se ha aplicado la polÌtica de Firewall para permitir acceso a Internet a todas las unidades organizativas del dominio."
+Write-Host "Se ha aplicado la pol√≠tica de Firewall para permitir acceso a Internet a todas las unidades organizativas del dominio."
